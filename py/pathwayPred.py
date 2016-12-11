@@ -6,6 +6,8 @@
 
 import os
 import json
+from crawler import *
+
 def getExtendRxn():
 
     fileDir = '../modules/iJO1366/pathwayVerify/model_id_changed/'
@@ -27,34 +29,89 @@ def getExtendRxn():
         json.dump(cpAddRxn,fn,indent = 2)
     print cpAddRxn
 
-def main():
-    # getExtendRxn()
+def bridgePre(n):
 
     cpAddRxn = json.load(open('../modules/iJO1366/pathwayVerify/cpAddRxn.json'))
-    n = 0
-    print len(cpAddRxn.keys())
-    for cp,addRxns in cpAddRxn.items():
-        if len(addRxns) ==14 :
-            n += 1
-    print n
+    keggIdModelId = json.load(open('../modules/iJO1366/original_model/KeggIdModelId.json'))
+    metsAllSmi = json.load(open('../modules/iJO1366/original_model/iJO1366_metsAll_smi(kegg18).json'))
 
-    '''
-    total:257; 
-    n = 1,77; 
-    n = 2,53; 
-    n = 3,38;  
-    n = 4,24, 
-    n = 5,13; 
-    n = 6,11; 
-    n = 7,10;
-    n = 8,11; 
-    n = 9,5; 
-    n = 10,3; 
-    n = 11,5;
-    n = 12,4;
-    n = 14,1;
-    n = 15,1;
-    n = 16,1;
-    '''
+    cpAddRxn_Smi = dict()
+
+    for cp,addRxns in cpAddRxn.items():
+        print cp
+
+        if len(addRxns) == n  :
+            try:
+                cpModelId = keggIdModelId[cp]
+                cpSmi =  metsAllSmi[cpModelId]
+            except:
+                space = 1
+                moltxt = crawlerKEGGCP(cp)
+
+                head = moltxt.split(' ')[0].strip()
+                if len(head) == 1:
+                    space = 2
+
+                f1 = open('./tmp.mol' ,'w')
+                f1.write('\n\n\n'+' '*space)
+                f1.write(moltxt)
+                f1.flush()
+                f1.close()
+                mol = AllChem.MolFromMolFile('./tmp.mol')
+                cpSmi = AllChem.MolToSmiles(mol)
+            
+            if cpSmi:
+                cpAddRxn_Smi[cpSmi] = list()
+                
+                for rxn in addRxns:
+
+                    rxnSmi = dict()
+                    for p,coef in rxn.items():
+                        
+                        if p.startswith('add'):
+                            pKeggId = p.split('add_met_kegg_')[1].split('_')[0]
+                            if pKeggId == cp:
+                                pSmi = cpSmi
+                                rxnSmi[pSmi] = coef
+                                continue
+                            else:
+                                try:
+                                    pModelId = keggIdModelId[pKeggId]
+                                    pSmi =  metsAllSmi[pModelId]
+                                except:
+                                    space = 1
+                                    moltxt = crawlerKEGGCP(pKeggId)
+
+                                    head = moltxt.split(' ')[0].strip()
+                                    if len(head) == 1:
+                                        space = 2
+
+                                    f1 = open('./tmp.mol' ,'w')
+                                    f1.write('\n\n\n'+' '*space)
+                                    f1.write(moltxt)
+                                    f1.flush()
+                                    f1.close()
+                                    mol = AllChem.MolFromMolFile('./tmp.mol')
+                                    pSmi = AllChem.MolToSmiles(mol)
+                                    rxnSmi[pSmi] = coef
+
+                        else:
+                            pSmi = metsAllSmi[p]
+                            rxnSmi[pSmi] = coef
+                    if len(rxnSmi.keys()) == len(rxn.keys()):
+                        cpAddRxn_Smi[cpSmi].append(rxnSmi)
+                    else:
+                        print ' %s rxn %s mets in rxn have no smi' % (cp,str(addRxns))
+
+    with open('../modules/iJO1366/pathwayVerify/cpAddRxn_Smi.json', 'w') as fn:
+        json.dump(cpAddRxn_Smi,fn,indent = 2)
+    print len(cpAddRxn_Smi.keys())
+    
+def main():
+    # getExtendRxn()
+    # bridgePre(1)
+
+    # f = json.load(open('../modules/iJO1366/pathwayVerify/cpAddRxn_Smi.json'))
+    # print len(f.keys())
 if __name__ == '__main__':
     main()
