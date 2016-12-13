@@ -23,9 +23,15 @@ def iJO1366_CPSmi():
 			keggId = cp["database_links"]["KEGGID"]
 
 			for _id in keggId:
+                space = 1
 				moltxt = crawlerKEGGCP(_id)
+
+				head = moltxt.split(' ')[0].strip()
+                if len(head) == 1:
+                    space = 2
+
 				f1 = open('./tmp.mol' ,'w')
-				f1.write('\n\n\n'+' ')
+				f1.write('\n\n\n'+' '*2)
 				f1.write(moltxt)
 				f1.flush()
 				f1.close()
@@ -36,7 +42,6 @@ def iJO1366_CPSmi():
 				fk.write(modelid+'\t'+smi+'\n')
 				fk.flush()
 
-
 		except:
 			# print '{} have no keggId'.format(modelid)
 			pass
@@ -46,6 +51,7 @@ def iJO1366_CPSmi():
 
 def main():
 	iJO1366_CPSmi()
+
 
 
 

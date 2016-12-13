@@ -9,7 +9,7 @@ import copy
 import json
 import cobra
 import rdkit
-from rxnpool20161124 import *
+from rxnpool20161206 import *
 from rdkit import Chem
 from rdkit.Chem import AllChem
 from cobra import Model, Reaction, Metabolite
@@ -694,11 +694,44 @@ def standerdSmi(metsSmi):
     return _metsSmi,metsList,smiList
 
 def validPre(metsCanSyn,metsNonSyn,resultDir,Choice = 2):
-    
-    # A = standerdSmi(dedup(json.load(open(metsAllFile))))[2]
-    # B = standerdSmi(dedup(json.load(open(metsCanSynFile))))[2]
-    # C = standerdSmi(dedup(json.load(open(metsAllNoSynFile))))[2]
 
+    '''因为有部分化合物是以盐的形式存在，所以Smiles里存在'.'的情况,需要将其分开处理再去匹配，否则一些反应物
+    或者生成物因为smiles不能完全匹配的问题，被认为是不存在于CanSyn或者NonSyn'''
+# #
+#     metsCanSynFile = json.load(open('../modules/iJO1366/original_model/iJO1366_metsCanSyn+fakeNoSyn_Smi-Names.json'))
+#     metsNonSynFile = json.load(open('../modules/iJO1366/original_model/iJO1366_metsNonSyn-fakeNoSyn_Smi-Names.json'))
+    
+#     metsCanSyn = [ NeutraliseCharges(i)[0] for i in metsCanSynFile.keys()]
+
+#     _metsCanSyn = copy.deepcopy(metsCanSyn)
+#     for met in metsCanSyn:
+#         if met.count('.'):
+#             mets = met.split('.')
+#             _metsCanSyn = _metsCanSyn +mets
+    
+#     metsCanSyn = list(set(metsCanSyn))
+#     _metsCanSyn = list(set(_metsCanSyn))
+
+#     metsNonSyn = [ NeutraliseCharges(i)[0] for i in metsNonSynFile.keys()]
+
+#     _metsNonSyn = copy.deepcopy(metsNonSyn)
+#     for met in metsNonSyn:
+#         if met.count('.'):
+#             mets = met.split('.')
+#             _metsNonSyn = _metsNonSyn +mets
+
+    
+#     metsNonSyn =  list(set(metsNonSyn))
+#     _metsNonSyn =  list(set(_metsNonSyn))
+#     _metsNonSyn.remove('NCCO')
+#     _metsNonSyn.remove('CCN')
+
+    # resultDir = '../modules/iJO1366/original_model/preResult/'
+    # validPre(_metsCanSyn,_metsNonSyn,resultDir,Choice = 2)
+    # preNoPro_querySmirks = validPredSum(_metsCanSyn,_metsNonSyn,resultDir,Choice = 2)
+    # print len(preNoPro_querySmirks)
+
+    
     B = metsCanSyn ; C = metsNonSyn
 
     choice = {1:'atLeastOnePsInMetsAllNoSyn',
@@ -724,6 +757,7 @@ def validPre(metsCanSyn,metsNonSyn,resultDir,Choice = 2):
             _resultDict = copy.deepcopy(resultDict)
             
             for i,item in resultDict.items():
+
                 smirks = item["Smikrs"]
                 rs = smirks.split(">>")[0].split(".")
                 ps = smirks.split(">>")[1].split(".")
@@ -739,11 +773,8 @@ def validPre(metsCanSyn,metsNonSyn,resultDir,Choice = 2):
                     else:
                         r_stand = r_stand[0]
 
-
                     if r_stand not in B:
-                        # print 'r:',r
-                        # print 'r_stand not in B: ',r_stand
-                        # print 
+
                         can = False
                         _resultDict.pop(str(i))
                         break
@@ -783,32 +814,25 @@ def validPre(metsCanSyn,metsNonSyn,resultDir,Choice = 2):
                             n = 0
                             if p_stand in C:
                                 n += 1
-                            elif p in B:
+                            elif p_stand in B: #modified@20161213 p p_stand
                                 pass
                             else:
                                 remained = False
+                        
                         if n != 1 or (not remained):
                             _resultDict.pop(str(i))
+                        print 
 
             output = filename+'\t'+'before:'+str(len(resultDict.keys()))+'\t'+'after:'+str(len(_resultDict))+'\n'
-        
             f.write(output)
             f.flush()
 
             with open(os.path.join(resultDir,filename,'result_%s.json' % Choice),'w') as fn:
                 json.dump(_resultDict,fn,indent = 2)
 
-       # for j,_item in _result_json.items():
-       #   rxnSmiFile = os.path.join(resultDir+filename+'/'+str(j)+".smi")
-       #    rxnImagefile = os.path.join(resultDir+filename+'/'+str(j)+".png")
-       #     DrawImage(rxnSmiFile,rxnImagefile) 
     f.close()
 
 def validPredSum(metsCanSyn,metsNonSyn,resultDir,Choice = 2):
-
-    # A = standerdSmi(dedup(json.load(open(metsAllFile))))[2]
-    # B = standerdSmi(dedup(json.load(open(metsCanSynFile))))[2]
-    # C = standerdSmi(dedup(json.load(open(metsAllNoSynFile))))[2]
 
     B = metsCanSyn ; C = metsNonSyn
 
@@ -864,34 +888,102 @@ def validPredSum(metsCanSyn,metsNonSyn,resultDir,Choice = 2):
 
     return preNoPro_querySmirks
 
-def preRxn2ModelRxn():
+def preRxn2ModelRxn(Draw = False):
     preNoPro_querySmirks = json.load(open('../modules/iJO1366/original_model/preResult/preNoPro_querySmirks_2.json'))
     metsCanSyn = json.load(open('../modules/iJO1366/original_model/iJO1366_metsCanSyn+fakeNoSyn_standSmi-Names.json'))
     metsNonSyn = json.load(open('../modules/iJO1366/original_model/iJO1366_metsNonSyn-fakeNoSyn_standSmi-Names.json'))
     metsNonSyn_extend = json.load(open('../modules/iJO1366/extend_model/iJO1366_extend_rev_noSyn.json'))
+    
+    dotCanSynSmi = [i for i in metsCanSyn.keys() if i.count('.')]
+    dotNonSynSmi = [i for i in metsNonSyn.keys() if i.count('.')]
+    dotSmi = dotCanSynSmi + dotNonSynSmi
+    
+    dotSmi_modelId = dict()
+    for Smi in dotSmi:
+        try:
+            Smi_modelId = metsCanSyn[Smi]
+        except:
+            Smi_modelId = metsNonSyn[Smi]
 
+        Smi_list = Smi.split('.')
+        for s in Smi_list:
+            dotSmi_modelId[s] = Smi_modelId[0].rsplit('_')[0]
     # n = 0
-    prePsModelId = list()
+    ps_query_index_rxnDic = dict()
     for ps,psitem in preNoPro_querySmirks.items():
         ps = NeutraliseCharges(ps)[0]
-        ps_modelId = metsNonSyn[ps]
+        ps_modelId = metsNonSyn[ps][0].rsplit('_')[0]
 
-        prePsModelId += ps_modelId
-    print len(prePsModelId)
-    print len(list(set(prePsModelId)))
 
-    perfect = [ i for i in prePsModelId if i in metsNonSyn_extend]
+        query_index_rxnDic = dict()
 
-    print perfect
-    print len(perfect)
-        # print ps_modelIdn
-    #     if len(ps_modelId) == 6:
-    #         print ps_modelId
-    #         n += 1
-    # print n
-        # for modelId in ps_modelId:
-        #     if modelId.endswith('_c'):
+        for query,rxnitems in psitem.items():
+            query = NeutraliseCharges(query)[0]
+            query_modelId = metsCanSyn[query][0].rsplit('_')[0]
 
+            index_rxnDic = dict()
+
+            for index,smirks in rxnitems.items():
+                
+                rxn = dict() #一个反应创建一个字典，value为系数值，消耗为负，生成为正
+
+                rxn_rs = smirks.split('>>')[0].split('.')
+                rxn_ps = smirks.split('>>')[1].split('.')
+
+                for r in rxn_rs:
+                    r = NeutraliseCharges(r)[0]
+
+                    if r in dotSmi_modelId.keys():
+                        r_modelId = dotSmi_modelId[r]
+                    else:
+                        r_modelId = metsCanSyn[r][0].rsplit('_')[0]
+
+                    if r_modelId not in rxn.keys():
+                        rxn[r_modelId] = -1
+                    else:
+                        rxn[r_modelId] -= 1
+
+                for p in rxn_ps:
+                    p = NeutraliseCharges(p)[0]
+
+                    if p in dotSmi_modelId.keys():
+                        p_modelId = dotSmi_modelId[p]
+                    else:
+                        try :
+                            p_modelId = metsCanSyn[p][0].rsplit('_')[0]
+                        except:
+                            p_modelId = metsNonSyn[p][0].rsplit('_')[0]
+
+                    if p_modelId not in rxn.keys():
+                        rxn[p_modelId] = 1
+                    else:
+                        rxn[p_modelId] += 1
+
+                if rxn:
+                    index_rxnDic[index] = rxn
+                
+                if Draw:
+
+                    ImageDir = '../modules/iJO1366/original_model/preResult/preNoPro_Image/'
+
+                    if not os.path.exists(ImageDir):
+
+                        os.mkdir(ImageDir)
+
+                    f = open(os.path.join(ImageDir,'./tmp.smi'),'w')
+                    f.write(smirks)
+                    f.flush()
+                    f.close()
+                    rxnSmiFile = os.path.join(ImageDir,'./tmp.smi')
+                    rxnImagefile = os.path.join(ImageDir,'%s_%s_%s_rxn.png' % (ps_modelId,query_modelId,index))
+                    DrawImage(rxnSmiFile,rxnImagefile)
+
+            query_index_rxnDic[query_modelId] = index_rxnDic
+
+        ps_query_index_rxnDic[ps_modelId] = query_index_rxnDic
+    with open('../modules/iJO1366/original_model/preResult/psModelId_queryModelId_index_rxnDic.json','w') as fn:
+        json.dump(ps_query_index_rxnDic,fn,indent = 2)
+    print 'len(ps_query_index_rxnDic.keys())',len(ps_query_index_rxnDic.keys())
 
 def getModelSmiMets(modelMetsAll):
     
@@ -1066,46 +1158,82 @@ def fluxCompare():
             can.append(ps)
     print len(can)
 
+
 def main():
-    modelDir = '../modules/iJO1366/'
-    modelname = 'iJO1366' 
-    # # # modelname = 'iJO1366_extend_rev'
-    modelFile = os.path.join(modelDir,'%s.json' % modelname)
-
-    preRxn2ModelRxn()
-#
-    # metsCanSynFile = json.load(open('../modules/iJO1366/original_model/iJO1366_metsCanSyn+fakeNoSyn_Smi-Names.json'))
-    # metsCanSyn = [ NeutraliseCharges(i)[0] for i in metsCanSynFile.keys()]
-
-    # _metsCanSyn = copy.deepcopy(metsCanSyn)
-    # for met in metsCanSyn:
-    #     if met.count('.'):
-    #         mets = met.split('.')
-    #         _metsCanSyn = _metsCanSyn +mets
+    modelDir = '../modules/iJO1366/original_model/'
     
-    # metsCanSyn = list(set(metsCanSyn))
-    # _metsCanSyn = list(set(_metsCanSyn))
-
-    # metsNonSyn = [ NeutraliseCharges(i)[0] for i in metsNonSynFile.keys()]
-
-    # _metsNonSyn = copy.deepcopy(metsNonSyn)
-    # for met in metsNonSyn:
-    #     if met.count('.'):
-    #         mets = met.split('.')
-    #         _metsNonSyn = _metsNonSyn +mets
-
+    filename = 'preResult/psModelId_queryModelId_index_rxnDic.json'
+    file = os.path.join(modelDir,filename)
+    psModelId_queryModelId_index_rxnDic = json.load(open(file))
     
-    # metsNonSyn =  list(set(metsNonSyn))
-    # _metsNonSyn =  list(set(_metsNonSyn))
-    # _metsNonSyn.remove('NCCO')
-    # _metsNonSyn.remove('CCN')
+    filename = 'iJO1366_metsCanSyn+fakeNoSyn.json'
+    file = os.path.join(modelDir,filename)
+    metsCanSyn = json.load(open(file))
+    canSyn = metsCanSyn.keys()
 
-    # resultDir = '../modules/iJO1366/original_model/preResult/'
+    filename = 'iJO1366_metsNonSyn-fakeNoSyn.json'
+    file = os.path.join(modelDir,filename)
+    metsNonSyn = json.load(open(file))
+    nonSyn = metsNonSyn.keys()
 
-    # # validPre(_metsCanSyn,_metsNonSyn,resultDir,Choice = 2)
-    # preNoPro_querySmirks = validPredSum(_metsCanSyn,_metsNonSyn,resultDir,Choice = 2)
-    # print len(preNoPro_querySmirks)
-    
+    f = open(os.path.join(modelDir,'preResult/psModelId_queryModelId_index_rxnDic.txt'),'w')
+    f.write('\t'*4)
+    f.write('c'+'\t'+'p'+'\t'+'e'+'\n'+'-'*50+'\n')
+
+    n = 0
+    total = 0
+    for ps,qsitem in psModelId_queryModelId_index_rxnDic.items():
+        total += 1
+        f.write(ps +'(p)' +'\t'+'N'+'\t')
+
+        ps_c = ps + '_c'
+        ps_p = ps + '_p'
+        ps_e = ps + '_e'
+
+        psset = [ps_c,ps_p,ps_e]
+        for m,p in enumerate(psset):
+            if p in nonSyn:
+                f.write('1' + '\t')
+                if m != 0:
+                    print ps
+                    n += 1
+            else:
+                f.write('0' + '\t')
+
+        f.write('\n') 
+        for qs,irxn in qsitem.items():
+            f.write(qs +'(q)' +'\t'+'Y'+'\t'+'\n')
+
+            for i,rxn in irxn.items():
+                f.write(str(i) + '\n')
+                for cp,coef in rxn.items():
+                    if cp == ps:
+                        continue
+                    else:
+                        if coef < 0:
+                            f.write(cp +'(r)' +'\t'+'Y'+'\t')
+                        else:
+                            f.write(cp +'(p)' +'\t'+'Y'+'\t')
+
+                        cp_c = cp+'_c'
+                        cp_p = cp+'_p'
+                        cp_e = cp+'_e'
+
+                        cpset = (cp_c,cp_p,cp_e)
+                        for c in cpset:
+                            if c in canSyn:
+                                f.write('1' + '\t')
+                            else:
+                                f.write('0' + '\t')
+                    f.write('\n') 
+        f.write('-'*50+'\n') 
+    f.close()
+    print n 
+    print total
+
 if __name__ == '__main__':
     main()
+    # preRxn2ModelRxn(Draw = False)
+
+
 
