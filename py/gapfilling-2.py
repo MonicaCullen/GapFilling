@@ -461,12 +461,15 @@ def missingExchangeRxn(metsCanSynFile,metsNonSynFile):
     
 def addExchangeRxn(modelFile,missingExRxn):
 
-    f =open('./addExchangeRxn_fluxChange_onebyone.txt','w')
+    # f =open('./addExchangeRxn_fluxChange_onebyone.txt','w')
+    f =open('../modules/iJO1366/original_model/preResult/calFakeNoSynCpFlux.txt','w')
 
     fakeNonSynAndCanSyn = missingExRxn
 
-    
+    fakeNoSynCpAddRxns = dict()
     for mets,metsub in fakeNonSynAndCanSyn.items():
+
+        fakeNoSynCpAddRxns[mets] = dict()
         
         model = cobra.io.load_json_model(modelFile)
         
@@ -477,6 +480,8 @@ def addExchangeRxn(modelFile,missingExRxn):
             m = len(model.reactions)
            
             sub = noSyn[0]
+            
+            fakeNoSynCpAddRxns[mets][sub] = dict()
 
             '''sub's _p existed and have flux,identify there be or not be a rxn to transport sub out'''
             
@@ -485,11 +490,15 @@ def addExchangeRxn(modelFile,missingExRxn):
             model.change_objective(addRxnOut) #改变目标函数为代谢物的分泌反应
             
             beforeFlux = model.optimize().f #填gap之前的流量值
+            fakeNoSynCpAddRxns[mets][sub]['ori_flux'] = beforeFlux
 
             # 添加_p-->_e 的交换反应
             mets_p = model.metabolites.get_by_id(sub.replace('_e','_p'))
-           
-            exchangeRxn = cobra.Reaction('add_exchangeRxn_%s_p-e' % mets)
+
+            addRxnName = 'add_exchangeRxn_%s_p-e' % mets
+            fakeNoSynCpAddRxns[mets][sub][addRxnName] = {'%s_p' % sub:-1,'%s__e' % sub:1}
+
+            exchangeRxn = cobra.Reaction(addRxnName)
             
             exchangeRxn.add_metabolites({mets_p:-1,mets_e:1})
             
@@ -498,17 +507,25 @@ def addExchangeRxn(modelFile,missingExRxn):
             model.change_objective(addRxnOut)
             
             afterFlux = model.optimize().f
+            fakeNoSynCpAddRxns[mets][sub]['new_flux'] = afterFlux
             
             n = len(model.reactions)
 
-            f.write('ModelRxns:  '+ str(m) + '\n')
-            f.write('ModelRxns:  ' + str(n) + '\n')
-            f.write('add   rxn:  '+ str(n-m) + '\n')
-            f.write('noSyn  CP:  ' + sub + '\n')
-            f.write('beforFlux:  ' + str(beforeFlux) + '\n') 
-            f.write('afterFlux:  '+ str(afterFlux) + '\n') 
-            f.write('-'*50 + '\n')
-            f.flush()
+            # f.write('ModelRxns:  '+ str(m) + '\n')
+            # f.write('ModelRxns:  ' + str(n) + '\n')
+            # f.write('add   rxn:  '+ str(n-m) + '\n')
+            # f.write('noSyn  CP:  ' + sub + '\n')
+            # f.write('beforFlux:  ' + str(beforeFlux) + '\n') 
+            # f.write('afterFlux:  '+ str(afterFlux) + '\n') 
+            # f.write('-'*50 + '\n')
+            # f.flush()
+            f.write('*'*70 + '\n')
+            f.write(mets + ' '*(32-len(mets)) + 'ori_flux_e :' +str(beforeFlux) + '\n'*2)
+            f.write('-'*70 +'\n')
+            f.write(addRxnName +' '*(32-len(addRxnName))+ 'new_flux_e :'+ str(afterFlux) + '\n'*2)
+
+            # print fakeNoSynCpAddRxns
+            # print '-'*50
 
         else:
 
@@ -516,16 +533,18 @@ def addExchangeRxn(modelFile,missingExRxn):
 
             for sub in noSyn:
 
-
+                fakeNoSynCpAddRxns[mets][sub] = dict()
+                
                 if sub.endswith('_e'):
 
                     (mets_e,addRxnOut_e,model) = addMetsRxnOut(sub,model)
 
-                    mets_c = model.metabolites.get_by_id(sub.replace('_e','_p'))
+                    mets_c = model.metabolites.get_by_id(sub.replace('_e','_c')) #修改@1215（把_c 写成了 _p）
 
                     model.change_objective(addRxnOut_e) #改变目标函数为代谢物的分泌反应
 
                     beforeFlux_e = model.optimize().f #填gap之前的流量值
+                    fakeNoSynCpAddRxns[mets][sub]['ori_flux'] = beforeFlux_e
 
 
                 elif sub.endswith('_p'):
@@ -535,11 +554,18 @@ def addExchangeRxn(modelFile,missingExRxn):
                     model.change_objective(addRxnOut_p) #改变目标函数为代谢物的分泌反应
 
                     beforeFlux_p = model.optimize().f #填gap之前的流量值
+                    fakeNoSynCpAddRxns[mets][sub]['ori_flux'] = beforeFlux_p
 
 
                 else:
                     print sub
-            
+            addRxnName_p_e = 'add_exchangeRxn_%s_p-e' % mets
+            addRxnName_c_p = 'add_exchangeRxn_%s_c-p' % mets
+
+            fakeNoSynCpAddRxns[mets][mets + '_p'][addRxnName_c_p] = {'%s_c' % mets:-1,'%s_p' % mets:1}
+            fakeNoSynCpAddRxns[mets][mets + '_e'][addRxnName_c_p] = {'%s_c' % mets:-1,'%s_p' % mets:1}
+            fakeNoSynCpAddRxns[mets][mets + '_e'][addRxnName_p_e] = {'%s_p' % mets:-1,'%s_e' % mets:1}
+
             exchangeRxn_p_e = cobra.Reaction('add_exchangeRxn_%s_p-e' % mets)
             exchangeRxn_c_p = cobra.Reaction('add_exchangeRxn_%s_c-p' % mets)
 
@@ -556,20 +582,40 @@ def addExchangeRxn(modelFile,missingExRxn):
 
             afterFlux_e = model.optimize().f
 
+            fakeNoSynCpAddRxns[mets][mets + '_p']['new_flux'] = afterFlux_p
+            fakeNoSynCpAddRxns[mets][mets + '_e']['new_flux'] = afterFlux_e
+
+
             n = len(model.reactions)
 
-            f.write('ModelRxns  :  ' + str(m) +'\n')
-            f.write('ModelRxns  :  ' + str(n) + '\n')
-            f.write('add     rxn:  ' + str(n-m)+ '\n')
-            f.write('noSyn    CP:  ' + str(noSyn) + '\n')
-            f.write('beforFlux_e:  ' + str(beforeFlux_e) + '\n')
-            f.write('afterFlux_e:  ' + str(afterFlux_e) + '\n')
-            f.write('beforFlux_p:  '+ str(beforeFlux_p)+ '\n')
-            f.write('afterFlux_p:  '+ str(afterFlux_p) + '\n')
-            f.write( '-'*50 + '\n')
+            # f.write('ModelRxns  :  ' + str(m) +'\n')
+            # f.write('ModelRxns  :  ' + str(n) + '\n')
+            # f.write('add     rxn:  ' + str(n-m)+ '\n')
+            # f.write('noSyn    CP:  ' + str(noSyn) + '\n')
+            # f.write('beforFlux_e:  ' + str(beforeFlux_e) + '\n')
+            # f.write('afterFlux_e:  ' + str(afterFlux_e) + '\n')
+            # f.write('beforFlux_p:  '+ str(beforeFlux_p)+ '\n')
+            # f.write('afterFlux_p:  '+ str(afterFlux_p) + '\n')
+            # f.write( '-'*50 + '\n')
+            # f.flush()
+            f.write('*'*70 + '\n')
+            f.write(str(mets) + ' '*(32-len(str(mets))) + 'ori_flux_p :' +str(beforeFlux_p) + '\n'*2)
+            f.write(str(mets) + ' '*(32-len(str(mets))) + 'ori_flux_e :' +str(beforeFlux_e) + '\n'*2)
+
+            f.write('-'*70 +'\n')
+            f.write(addRxnName_c_p +' '*(32-len(addRxnName_c_p))+ 'new_flux_p :'+ str(afterFlux_p) + '\n'*2)
+            f.write(addRxnName_p_e +' '*(32-len(addRxnName_p_e))+ 'new_flux_e :'+ str(afterFlux_e) + '\n'*2)
+            
             f.flush()
+
+            # print fakeNoSynCpAddRxns
+
+            # print '-'*50
+
     f.close
             
+    with open('../modules/iJO1366/original_model/preResult/iJO1366_fakeNoSynCpAddRxns.json','w') as fn:
+        json.dump(fakeNoSynCpAddRxns,fn,indent = 2)
 
 def addMetsRxnOut(sub,model):
     
@@ -695,36 +741,48 @@ def standerdSmi(metsSmi):
 
 def validPre(metsCanSyn,metsNonSyn,resultDir,Choice = 2):
 
-    '''因为有部分化合物是以盐的形式存在，所以Smiles里存在'.'的情况,需要将其分开处理再去匹配，否则一些反应物
-    或者生成物因为smiles不能完全匹配的问题，被认为是不存在于CanSyn或者NonSyn'''
-# #
-#     metsCanSynFile = json.load(open('../modules/iJO1366/original_model/iJO1366_metsCanSyn+fakeNoSyn_Smi-Names.json'))
-#     metsNonSynFile = json.load(open('../modules/iJO1366/original_model/iJO1366_metsNonSyn-fakeNoSyn_Smi-Names.json'))
+ # # '''因为有部分化合物是以盐的形式存在，所以Smiles里存在'.'的情况,需要将其分开处理再去匹配，否则一些反应物
+    # # 或者生成物因为smiles不能完全匹配的问题，被认为是不存在于CanSyn或者NonSyn'''
+   
+    # metsCanSynFile = json.load(open('../modules/iJO1366/original_model/iJO1366_metsCanSyn+fakeNoSyn_Smi-Names.json'))
+    # metsNonSynFile = json.load(open('../modules/iJO1366/original_model/iJO1366_metsNonSyn-fakeNoSyn_Smi-Names.json'))
     
-#     metsCanSyn = [ NeutraliseCharges(i)[0] for i in metsCanSynFile.keys()]
+    # metsCanSyn = [ NeutraliseCharges(i)[0] for i in metsCanSynFile.keys()]
 
-#     _metsCanSyn = copy.deepcopy(metsCanSyn)
-#     for met in metsCanSyn:
-#         if met.count('.'):
-#             mets = met.split('.')
-#             _metsCanSyn = _metsCanSyn +mets
+    # _metsCanSyn = copy.deepcopy(metsCanSyn)
+    # for met in metsCanSyn:
+    #     if met.count('.'):
+    #         mets = met.split('.')
+    #         _metsCanSyn = _metsCanSyn +mets
     
-#     metsCanSyn = list(set(metsCanSyn))
-#     _metsCanSyn = list(set(_metsCanSyn))
+    # metsCanSyn = list(set(metsCanSyn))
+    # _metsCanSyn = list(set(_metsCanSyn))
 
-#     metsNonSyn = [ NeutraliseCharges(i)[0] for i in metsNonSynFile.keys()]
+    # print 'metsCanSyn',len(metsCanSyn)
+    # print '_metsCanSyn',len(_metsCanSyn)
 
-#     _metsNonSyn = copy.deepcopy(metsNonSyn)
-#     for met in metsNonSyn:
-#         if met.count('.'):
-#             mets = met.split('.')
-#             _metsNonSyn = _metsNonSyn +mets
+    # metsNonSyn = [ NeutraliseCharges(i)[0] for i in metsNonSynFile.keys()]
+
+    # _metsNonSyn = copy.deepcopy(metsNonSyn)
+    # for met in metsNonSyn:
+    #     if met.count('.'):
+    #         mets = met.split('.')
+    #         _metsNonSyn = _metsNonSyn +mets
 
     
-#     metsNonSyn =  list(set(metsNonSyn))
-#     _metsNonSyn =  list(set(_metsNonSyn))
-#     _metsNonSyn.remove('NCCO')
-#     _metsNonSyn.remove('CCN')
+    # metsNonSyn =  list(set(metsNonSyn))
+    # _metsNonSyn =  list(set(_metsNonSyn))
+    # _metsNonSyn.remove('NCCO')
+    # _metsNonSyn.remove('CCN')
+
+    # print 'metsNonSyn',len(metsNonSyn)
+    # print '_metsNonSyn 1 ',len(_metsNonSyn)
+    # #因为标准化之后。一些化合物在去掉构型之后Smi是相同的，因此会同时存在于CanSyn和NonSyn,会影响下面的Smi匹配
+    # for i in _metsCanSyn:
+    #     if i in _metsNonSyn:
+    #         _metsNonSyn.remove(i)
+
+    # print '_metsNonSyn 2 ',len(_metsNonSyn)
 
     # resultDir = '../modules/iJO1366/original_model/preResult/'
     # validPre(_metsCanSyn,_metsNonSyn,resultDir,Choice = 2)
@@ -737,7 +795,7 @@ def validPre(metsCanSyn,metsNonSyn,resultDir,Choice = 2):
     choice = {1:'atLeastOnePsInMetsAllNoSyn',
               2:'atLeastOnePsInMetsAllNoSynAndRemainedPsInMetsAll '}
 
-    f = open(os.path.join(resultDir,'%s.txt' % choice[Choice]),'w')
+    f = open(os.path.join(resultDir,'%s-20161215.txt' % choice[Choice]),'w')
 
     for filename in os.listdir(resultDir):
 
@@ -827,7 +885,7 @@ def validPre(metsCanSyn,metsNonSyn,resultDir,Choice = 2):
             f.write(output)
             f.flush()
 
-            with open(os.path.join(resultDir,filename,'result_%s.json' % Choice),'w') as fn:
+            with open(os.path.join(resultDir,filename,'result_%s-20161215.json' % Choice),'w') as fn:
                 json.dump(_resultDict,fn,indent = 2)
 
     f.close()
@@ -850,7 +908,7 @@ def validPredSum(metsCanSyn,metsNonSyn,resultDir,Choice = 2):
                     result_txt = open(path).read()
                     query = mtsmi(mfsmi(result_txt.split('\n',1)[0].split(':',1)[1].strip()))
                 
-                if name == 'result_%s.json' % Choice: 
+                if name == 'result_%s-20161215.json' % Choice: 
                     resultDict = json.load(open(path))
         
             for i,item in resultDict.items():
@@ -883,13 +941,13 @@ def validPredSum(metsCanSyn,metsNonSyn,resultDir,Choice = 2):
                     else:
                         pass
 
-    with open(os.path.join(resultDir,'preNoPro_querySmirks_%s.json' % Choice),'w') as fn:
+    with open(os.path.join(resultDir,'preNoPro_querySmirks_%s-20161215.json' % Choice),'w') as fn:
         json.dump(preNoPro_querySmirks,fn,indent = 2)
 
     return preNoPro_querySmirks
 
 def preRxn2ModelRxn(Draw = False):
-    preNoPro_querySmirks = json.load(open('../modules/iJO1366/original_model/preResult/preNoPro_querySmirks_2.json'))
+    preNoPro_querySmirks = json.load(open('../modules/iJO1366/original_model/preResult/preNoPro_querySmirks_2-20161215.json'))
     metsCanSyn = json.load(open('../modules/iJO1366/original_model/iJO1366_metsCanSyn+fakeNoSyn_standSmi-Names.json'))
     metsNonSyn = json.load(open('../modules/iJO1366/original_model/iJO1366_metsNonSyn-fakeNoSyn_standSmi-Names.json'))
     metsNonSyn_extend = json.load(open('../modules/iJO1366/extend_model/iJO1366_extend_rev_noSyn.json'))
@@ -897,7 +955,7 @@ def preRxn2ModelRxn(Draw = False):
     dotCanSynSmi = [i for i in metsCanSyn.keys() if i.count('.')]
     dotNonSynSmi = [i for i in metsNonSyn.keys() if i.count('.')]
     dotSmi = dotCanSynSmi + dotNonSynSmi
-    
+        
     dotSmi_modelId = dict()
     for Smi in dotSmi:
         try:
@@ -907,19 +965,35 @@ def preRxn2ModelRxn(Draw = False):
 
         Smi_list = Smi.split('.')
         for s in Smi_list:
-            dotSmi_modelId[s] = Smi_modelId[0].rsplit('_')[0]
+            if s in metsCanSyn.keys():
+                Smi_modelId = metsCanSyn[s]
+            dotSmi_modelId[s] = Smi_modelId[0].rsplit('_',1)[0]
     # n = 0
     ps_query_index_rxnDic = dict()
-    for ps,psitem in preNoPro_querySmirks.items():
-        ps = NeutraliseCharges(ps)[0]
-        ps_modelId = metsNonSyn[ps][0].rsplit('_')[0]
 
+    for ps,psitem in preNoPro_querySmirks.items():
+                
+        ps = NeutraliseCharges(ps)[0]
+        ps_modelId = metsNonSyn[ps][0].rsplit('_',1)[0]
+
+        if Draw:
+            ImageDir = '../modules/iJO1366/original_model/preResult/preNoPro_Image/'
+            if not os.path.exists(ImageDir):
+                os.mkdir(ImageDir)
+
+            f = open(os.path.join(ImageDir,'./tmp.smi'),'w')
+            f.write(ps)
+            f.flush()
+            f.close()
+            rxnSmiFile = os.path.join(ImageDir,'./tmp.smi')
+            rxnImagefile = os.path.join(ImageDir,'%s.png' % (ps_modelId))
+            DrawImage(rxnSmiFile,rxnImagefile,800,400)
 
         query_index_rxnDic = dict()
 
         for query,rxnitems in psitem.items():
             query = NeutraliseCharges(query)[0]
-            query_modelId = metsCanSyn[query][0].rsplit('_')[0]
+            query_modelId = metsCanSyn[query][0].rsplit('_',1)[0]
 
             index_rxnDic = dict()
 
@@ -936,7 +1010,7 @@ def preRxn2ModelRxn(Draw = False):
                     if r in dotSmi_modelId.keys():
                         r_modelId = dotSmi_modelId[r]
                     else:
-                        r_modelId = metsCanSyn[r][0].rsplit('_')[0]
+                        r_modelId = metsCanSyn[r][0].rsplit('_',1)[0]
 
                     if r_modelId not in rxn.keys():
                         rxn[r_modelId] = -1
@@ -950,9 +1024,9 @@ def preRxn2ModelRxn(Draw = False):
                         p_modelId = dotSmi_modelId[p]
                     else:
                         try :
-                            p_modelId = metsCanSyn[p][0].rsplit('_')[0]
+                            p_modelId = metsCanSyn[p][0].rsplit('_',1)[0]
                         except:
-                            p_modelId = metsNonSyn[p][0].rsplit('_')[0]
+                            p_modelId = metsNonSyn[p][0].rsplit('_',1)[0]
 
                     if p_modelId not in rxn.keys():
                         rxn[p_modelId] = 1
@@ -963,27 +1037,223 @@ def preRxn2ModelRxn(Draw = False):
                     index_rxnDic[index] = rxn
                 
                 if Draw:
-
-                    ImageDir = '../modules/iJO1366/original_model/preResult/preNoPro_Image/'
-
-                    if not os.path.exists(ImageDir):
-
-                        os.mkdir(ImageDir)
-
                     f = open(os.path.join(ImageDir,'./tmp.smi'),'w')
                     f.write(smirks)
                     f.flush()
                     f.close()
                     rxnSmiFile = os.path.join(ImageDir,'./tmp.smi')
                     rxnImagefile = os.path.join(ImageDir,'%s_%s_%s_rxn.png' % (ps_modelId,query_modelId,index))
-                    DrawImage(rxnSmiFile,rxnImagefile)
+                    DrawImage(rxnSmiFile,rxnImagefile,800,400)
 
             query_index_rxnDic[query_modelId] = index_rxnDic
 
         ps_query_index_rxnDic[ps_modelId] = query_index_rxnDic
-    with open('../modules/iJO1366/original_model/preResult/psModelId_queryModelId_index_rxnDic.json','w') as fn:
+    with open('../modules/iJO1366/original_model/preResult/psModelId_queryModelId_index_rxnDic-20161215.json','w') as fn:
         json.dump(ps_query_index_rxnDic,fn,indent = 2)
     print 'len(ps_query_index_rxnDic.keys())',len(ps_query_index_rxnDic.keys())
+
+def modelRxn2txt():
+   
+    modelDir = '../modules/iJO1366/original_model/'
+    
+    filename = 'preResult/psModelId_queryModelId_index_rxnDic-20161215.json'
+    file = os.path.join(modelDir,filename)
+    psModelId_queryModelId_index_rxnDic = json.load(open(file))
+    
+    filename = 'iJO1366_metsCanSyn+fakeNoSyn.json'
+    file = os.path.join(modelDir,filename)
+    metsCanSyn = json.load(open(file))
+    canSyn = metsCanSyn.keys()
+
+    filename = 'iJO1366_metsNonSyn-fakeNoSyn.json'
+    file = os.path.join(modelDir,filename)
+    metsNonSyn = json.load(open(file))
+    nonSyn = metsNonSyn.keys()
+
+    f = open(os.path.join(modelDir,'preResult/psModelId_queryModelId_index_rxnDic-20161215.txt'),'w')
+    f.write('*'*50+'\n')
+    f.write('\t'*5)
+    f.write('c'+'\t'+'p'+'\t'+'e'+'\n')
+
+    for ps,qsitem in psModelId_queryModelId_index_rxnDic.items():
+        f.write(ps +'(p)' +' '*(13-len(ps))+'N'+'\t')
+
+        ps_c = ps + '_c'
+        ps_p = ps + '_p'
+        ps_e = ps + '_e'
+
+        psset = [ps_c,ps_p,ps_e]
+        for m,p in enumerate(psset):
+            if p in nonSyn:
+                f.write('1' + '\t')
+            else:
+                f.write('0' + '\t')
+
+        f.write('\n'*2) 
+        for qs,irxn in qsitem.items():
+            f.write('-'*50+'\n'+qs +'(q)' +' '*(13-len(qs))+'Y'+'\t'+'\n'*2)
+
+            for i,rxn in irxn.items():
+                f.write('reaction '+str(i) + '\n')
+                for cp,coef in rxn.items():
+                    if cp == ps:
+                        continue
+                    else:
+                        if coef < 0:
+                            f.write(cp +'(r)' +' '*(13-len(cp))+'Y'+'\t')
+                        else:
+                            f.write(cp +'(p)' +' '*(13-len(cp))+'Y'+'\t')
+
+                        cp_c = cp+'_c'
+                        cp_p = cp+'_p'
+                        cp_e = cp+'_e'
+
+                        cpset = (cp_c,cp_p,cp_e)
+                        for c in cpset:
+                            if c in canSyn:
+                                f.write('1' + '\t')
+                            else:
+                                f.write('0' + '\t')
+                        f.write('\n')
+                f.write('\n') 
+        f.write('end'+'\n'+'*'*50+'\n'*2) 
+    f.close()
+
+
+
+def addpreModelRxn():
+
+    modelDir = '../modules/iJO1366/original_model/'
+    
+    filename = 'preResult/psModelId_queryModelId_index_rxnDic-20161215.json'
+    file = os.path.join(modelDir,filename)
+    psModelId_queryModelId_index_rxnDic = json.load(open(file))
+    
+    filename = 'iJO1366_metsCanSyn+fakeNoSyn.json'
+    file = os.path.join(modelDir,filename)
+    metsCanSyn = json.load(open(file))
+    canSyn = metsCanSyn.keys()
+
+    filename = 'iJO1366_metsNonSyn-fakeNoSyn.json'
+    file = os.path.join(modelDir,filename)
+    metsNonSyn = json.load(open(file))
+    nonSyn = metsNonSyn.keys()
+
+    synCpAddRxns = dict()
+    for ps,qsitem in psModelId_queryModelId_index_rxnDic.items():
+        
+        ps_c = ps + '_c'
+       
+        addRxns = dict()
+        
+
+        for qs,indexRxn in qsitem.items():
+
+            for i,rxn in indexRxn.items():
+
+                addRxnName = 'add_%s_%s_%s' %(ps,qs,i)
+
+                addRxns[addRxnName] = dict()
+                addRxns[addRxnName]['addmets'] = list()
+                
+                if ps_c not in nonSyn:
+                    addRxns[addRxnName]['addmets'].append(ps_c)
+
+
+                mainRxn = dict()
+                coRxns = list()
+                
+                for cp,coef in rxn.items():
+                    if cp == ps:
+                        mainRxn[ps_c] = coef
+                    else:
+                        cp_c = cp +'_c'
+                        
+                        if cp_c not in canSyn:
+
+                            addRxns[addRxnName]['addmets'].append(cp_c)
+                            
+                            cp_p = cp + '_p'
+
+                            if cp_p not in canSyn:
+
+                                addRxns[addRxnName]['addmets'].append(cp_p)
+
+                                coRxn_e2p = dict()
+                                rxnName = 'addCoRxn_%s2%s' % (cp_e,cp_p)
+                                rxn = {cp_p:-1,cp_c:1}
+                                coRxn_e2p[rxnName] = rxn
+                                coRxns.append(coRxn_e2p)
+                            
+                            coRxn_p2c = dict()
+                            rxnName = 'addCoRxn_%s2%s' % (cp_p,cp_c)
+                            rxn = {cp_p:-1,cp_c:1}
+                            coRxns.append(coRxn_p2c)
+                        
+                        else:
+                            mainRxn[cp_c] = coef
+
+                addRxns[addRxnName]['mainRxn'] = mainRxn
+                addRxns[addRxnName]['coRxns'] = coRxns 
+        
+        synCpAddRxns[ps_c]=addRxns
+    with open('../modules/iJO1366/original_model/iJO1366_synCpAddRxns.json','w') as fn:
+        json.dump(synCpAddRxns,fn,indent = 2)
+    print len(synCpAddRxns)
+
+def calNonSynCpFlux():
+
+    synCpAddRxns = json.load(open('../modules/iJO1366/original_model/preResult/iJO1366_synCpAddRxns.json'))
+    model = cobra.io.load_json_model('../modules/iJO1366/original_model/ijO1366.json')
+    
+    f = open('../modules/iJO1366/original_model/preResult/calNonSynCpFlux.txt-bk','w')
+   
+    calNonSynCpFlux = dict()
+   
+    for cp,rxnitem in synCpAddRxns.items():
+        f.write('*'*50+'\n')
+        n =1
+        
+        for addrxn,item in rxnitem.items():
+            _model = copy.deepcopy(model)
+
+            #先判断添加该预测反应 是否需要添加化合物，如果需要先把化合物添加齐
+            if  item["addmets"]:
+                for met in item["addmets"]:
+                    try:
+                        _met = _model.metabolites.get_by_id(met.replace('_c','_p'))
+                    except:
+                        _met = _model.metabolites.get_by_id(met.replace('_c','_e'))
+                    meta = cobra.Metabolite(met,formula = _met.formula,name = _met.name,charge = _met.charge,compartment = 'c')
+                    _model.add_metabolites(meta)
+
+            #添加完化合物(有些_c化合物并不存在于原模型中)，先计算添加反应前目标化合物的流量
+            (cp_mets,addRxnOut,_model) = addMetsRxnOut(cp,_model)
+            if n>0:
+                _model.change_objective(addRxnOut)
+                original_flux = _model.optimize().f
+                f.write(cp + ' '*(24-len(cp)) +'ori_flux :' + str(original_flux) + '\n')
+                f.write('-'*50+'\n')
+                n -= 1
+
+                calNonSynCpFlux[cp] = dict()
+                calNonSynCpFlux[cp]['ori_flux'] = original_flux
+
+            
+            #添加新反应
+            reaction = cobra.Reaction(addrxn)
+            for met,coef in item['mainRxn'].items():
+                reaction.add_metabolites({_model.metabolites.get_by_id(met):coef})
+
+            _model.add_reaction(reaction)
+            _model.change_objective(addRxnOut)
+            new_flux = _model.optimize().f
+            f.write(addrxn + ' '*(24-len(addrxn)) +'new_flux :' + str(new_flux) + '\n'*2)
+            f.flush()
+            calNonSynCpFlux[cp][addrxn] = new_flux
+    f.close()
+    with open('../modules/iJO1366/original_model/preResult/calNonSynCpFlux.json','w') as fn:
+        json.dump(calNonSynCpFlux,fn,indent = 2)
 
 def getModelSmiMets(modelMetsAll):
     
@@ -1012,8 +1282,6 @@ def metsSmi2modelId(smile,modelMetsAll):
         return s_ModlId
     except:
         return None
-
-def rxnSmirks2modelId(smirks,modelMetsAll):
 
     rs = [i.strip() for i in smirks.split('>>')[0].split('.')]
     ps = [j.strip() for j in smirks.split('>>')[1].split('.')]
@@ -1157,83 +1425,118 @@ def fluxCompare():
         if max(fluxlist) >0.01 and max(fluxlist) > optFlux[ps]:
             can.append(ps)
     print len(can)
+def writeNoSynFile():
 
-
-def main():
-    modelDir = '../modules/iJO1366/original_model/'
+    file = json.load(open('../modules/iJO1366/original_model/preResult/iJO1366_synCpAddRxns.json'))
+    file1 = json.load(open('../modules/iJO1366/original_model/preResult/calNonSynCpFlux.json'))
     
-    filename = 'preResult/psModelId_queryModelId_index_rxnDic.json'
-    file = os.path.join(modelDir,filename)
-    psModelId_queryModelId_index_rxnDic = json.load(open(file))
-    
-    filename = 'iJO1366_metsCanSyn+fakeNoSyn.json'
-    file = os.path.join(modelDir,filename)
-    metsCanSyn = json.load(open(file))
-    canSyn = metsCanSyn.keys()
+    f = open('../modules/iJO1366/original_model/preResult/iJO1366_synCpAddRxns.txt','w')
+    for cp ,addRxn in file.items():
+        f.write('*'*110+'\n')
+        f.write('metabolite :' + ' '*(32-len('metabolite :'))+cp +' '*(50-len(cp))+'ori_flux:'+str(file1[cp]["ori_flux"])+'\n')
+        f.write('-'*110 + '\n')
 
-    filename = 'iJO1366_metsNonSyn-fakeNoSyn.json'
-    file = os.path.join(modelDir,filename)
-    metsNonSyn = json.load(open(file))
-    nonSyn = metsNonSyn.keys()
+        for rxnName,it in addRxn.items():
+            if it["addmets"]:
+                pass
+                # f.write('add mets :' +' '*(32-len('add mets :'))+ it["addmets"][0] + '\n')
 
-    f = open(os.path.join(modelDir,'preResult/psModelId_queryModelId_index_rxnDic.txt'),'w')
-    f.write('\t'*4)
-    f.write('c'+'\t'+'p'+'\t'+'e'+'\n'+'-'*50+'\n')
+            rs = list()
+            ps = list()
 
-    n = 0
-    total = 0
-    for ps,qsitem in psModelId_queryModelId_index_rxnDic.items():
-        total += 1
-        f.write(ps +'(p)' +'\t'+'N'+'\t')
-
-        ps_c = ps + '_c'
-        ps_p = ps + '_p'
-        ps_e = ps + '_e'
-
-        psset = [ps_c,ps_p,ps_e]
-        for m,p in enumerate(psset):
-            if p in nonSyn:
-                f.write('1' + '\t')
-                if m != 0:
-                    print ps
-                    n += 1
-            else:
-                f.write('0' + '\t')
-
-        f.write('\n') 
-        for qs,irxn in qsitem.items():
-            f.write(qs +'(q)' +'\t'+'Y'+'\t'+'\n')
-
-            for i,rxn in irxn.items():
-                f.write(str(i) + '\n')
-                for cp,coef in rxn.items():
-                    if cp == ps:
-                        continue
+            for m,coef in it['mainRxn'].items():
+                if coef < 0 :
+                    if abs(coef) != 1: 
+                        rs.append(str(abs(coef)) + ' ' + m)
                     else:
+                        rs.append(m)
+                else:
+                    if abs(coef) != 1: 
+                        ps.append(str(abs(coef)) + ' ' + m)
+                    else:
+                        ps.append(m)
+
+            rxn = ' + '.join(rs) + ' --> '+' + '.join(ps)
+            f.write(rxnName + ' '*(32-len(rxnName)) +rxn + ' '*(50-len(rxn))+'new_flux:'+str(file1[cp][rxnName])+'\n'*2)
+
+def writeFakeNoSynFile():
+
+    file = json.load(open('../modules/iJO1366/original_model/preResult/iJO1366_fakeNoSynCpAddRxns.json'))
+    
+    f = open('../modules/iJO1366/original_model/preResult/iJO1366_fakeNoSynCpAddRxns.txt','w')
+    
+    for met,subit in file.items():
+
+        for cp,cpit in subit.items():
+
+            f.write('*'*100+'\n')
+            f.write('metabolite :' + ' '*(32-len('metabolite :'))+cp +' '*(35-len(cp))+'ori_flux:'+str(cpit["ori_flux"])+'\n')
+            f.write('-'*100 + '\n')
+
+            for rxnName,it in cpit.items():
+                if rxnName.startswith('add'):
+                    for c,coef in it.items():
                         if coef < 0:
-                            f.write(cp +'(r)' +'\t'+'Y'+'\t')
-                        else:
-                            f.write(cp +'(p)' +'\t'+'Y'+'\t')
+                            rs = c
+                        if coef > 0 :
+                            ps = c
+                    rxn = rs + ' --> '+ ps
+                    f.write(rxnName + ' '*(32-len(rxnName)) +rxn + ' '*(35-len(rxn))+'new_flux:'+str(cpit['new_flux'])+'\n'*2)
 
-                        cp_c = cp+'_c'
-                        cp_p = cp+'_p'
-                        cp_e = cp+'_e'
 
-                        cpset = (cp_c,cp_p,cp_e)
-                        for c in cpset:
-                            if c in canSyn:
-                                f.write('1' + '\t')
-                            else:
-                                f.write('0' + '\t')
-                    f.write('\n') 
-        f.write('-'*50+'\n') 
-    f.close()
-    print n 
-    print total
+    
+def main():
+    # addpreModelRxn()
+    # calNonSynCpFlux() 
+    # preRxn2ModelRxn(Draw = True)
+    writeFakeNoSynFile()
 
 if __name__ == '__main__':
-    main()
-    # preRxn2ModelRxn(Draw = False)
+    # main()
+    # modelFile = '../modules/iJO1366/original_model/iJO1366.json'
+    # missingExRxn = json.load(open('../modules/iJO1366/original_model/iJO1366_fakeNonSynAndItsCanSyn.json'))
+    # addExchangeRxn(modelFile,missingExRxn)
+    resultDir = ('../modules/iJO1366/original_model/preResult/')
+
+    for filename in os.listdir(resultDir):
+
+        if filename.startswith('2016'):
+
+            for name in os.listdir(os.path.join(resultDir+filename)):
+
+                path = resultDir+filename+'/'+name
+                
+                if name == 'result.txt':
+                    result_txt = open(path).read()
+                    query = mtsmi(mfsmi(result_txt.split('\n',1)[0].split(':',1)[1].strip()))
+                    query_stand = NeutraliseCharges(query)[0]
+                    if query_stand == 'OCC1OC(O)C(O)C(O)C1O':
+                        print filename
+                        break
+
+
+
+
+
+'''
+    metsNonSyn_extend = json.load(open('../modules/iJO1366/extend_model/iJO1366_extend_rev_noSyn.json'))
+    metsNoSyn = json.load(open('../modules/iJO1366/original_model/iJO1366_metsNonSyn-fakeNoSyn.json'))
+    print len(metsNoSyn.keys())
+    print len(metsNonSyn_extend)
+
+    diff = [i for i in metsNoSyn.keys() if  i in metsNonSyn_extend]
+    de_diff = set(list(diff))
+
+    diff_ = [i.rsplit('_',1)[0] for i in diff]
+    de_diff_ = list(set(diff_))
+    # print diff 
+    print len(diff)
+    print len(de_diff)
+
+    print len(diff_)
+    print len(de_diff_)
+
+'''
 
 
 

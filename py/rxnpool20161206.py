@@ -557,9 +557,9 @@ def arrange(dic):
     array = sorted(dic.iteritems(),key=lambda t:t[1],reverse=True)
     return array
 
-def DrawImage(rxnSmiFile,rxnImagefile):
+def DrawImage(rxnSmiFile,rxnImagefile,height = 1600,width = 800):
     
-    command='/Applications/ChemAxon/MarvinBeans/bin/molconvert png:w1600,h800 '+ rxnSmiFile+ ' -o '+ rxnImagefile
+    command='/Applications/ChemAxon/MarvinBeans/bin/molconvert png:w%s,h%s ' %(height,width)+ rxnSmiFile+ ' -o '+ rxnImagefile
     os.popen(command)
     return rxnImagefile
 
